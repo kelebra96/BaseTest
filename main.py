@@ -71,12 +71,8 @@ interval = st.sidebar.selectbox(
 
 # Inputs para ordens de compra e venda
 st.sidebar.header("Trading Simulator")
-buy_price = st.sidebar.number_input(
-    "Preço de compra:", min_value=0, value=0, step=1000
-)
-sell_price = st.sidebar.number_input(
-    "Preço de venda:", min_value=0, value=0, step=1000
-)
+buy_price = st.sidebar.number_input("Preço de compra:", min_value=0, value=0, step=1000)
+sell_price = st.sidebar.number_input("Preço de venda:", min_value=0, value=0, step=1000)
 st.sidebar.text("Enter 0 in any field to ignore that order.")
 
 # Inicializar o estado para armazenar ordens e lucro/perda
@@ -89,10 +85,10 @@ if "profit" not in st.session_state:
 if (
     st.sidebar.button("Get Data") or True
 ):  # Remova 'or True' para desabilitar a atualização automática
-    # Obter dados para o gráfico de candlestick
+    # Quantidade de  candlestick no gráfico
     lookback = st.sidebar.selectbox(
         "Selecione o número de candles:",
-        options=[5,10, 20, 50, 100,150,200],
+        options=[5, 10, 20, 50, 100, 150, 200],
         index=0,
     )
     candle_data = get_candle_data(
@@ -117,7 +113,7 @@ if (
         go.Scatter(
             x=candle_data["open_time"],
             y=candle_data["Upper"],
-            name="Upper Band",
+            name="Banda Superior",
             line=dict(color="rgba(250, 0, 0, 0.50)"),
         )
     )
@@ -125,7 +121,7 @@ if (
         go.Scatter(
             x=candle_data["open_time"],
             y=candle_data["Lower"],
-            name="Lower Band",
+            name="Banda Inferior",
             line=dict(color="rgba(0, 0, 250, 0.50)"),
         )
     )
@@ -133,7 +129,7 @@ if (
         go.Scatter(
             x=candle_data["open_time"],
             y=candle_data["MA20"],
-            name="Moving Average (20)",
+            name="Média Móvel (20)",
             line=dict(color="rgba(0, 255, 0, 0.50)"),
         )
     )
@@ -143,7 +139,7 @@ if (
         fig.add_annotation(
             x=order["time"],
             y=order["price"],
-            text=f" Trade realizado ",
+            text=f"Trade {order['type']} at {order['price']}",
             showarrow=True,
             arrowhead=1,
             ax=0,
@@ -163,9 +159,9 @@ if (
 
     # Exibir o gráfico
     fig.update_layout(
-        title=f"{crypto_symbol} Candlestick Chart with Bollinger Bands and Moving Average ({interval})",
+        title=f"{crypto_symbol} Gráfico de velas com bandas de Bollinger e média móvel ({interval})",
         xaxis_title="Time",
-        yaxis_title="Price",
+        yaxis_title="Preço (USDT)",
         xaxis_rangeslider_visible=False,
     )
 
@@ -182,7 +178,7 @@ if (
                 "time": candle_data.iloc[-1]["open_time"],
             }
         )
-        st.success(f"Bought at {buy_price}")
+        st.success(f"Comprei em {buy_price}")  # Valor da compra!!!!
     if sell_price > 0 and last_price >= sell_price:
         # Registrar ordem de venda
         st.session_state["orders"].append(
@@ -192,15 +188,16 @@ if (
                 "time": candle_data.iloc[-1]["open_time"],
             }
         )
-        st.success(f"Sold at {sell_price}")
+        st.success(f"Vendido em {sell_price}")  # Valor da venda!!!!
         if (
             len(st.session_state["orders"]) > 1
             and st.session_state["orders"][-2]["type"] == "buy"
         ):
             # Calcular lucro/perda da última operação
-            profit = sell_price - st.session_state["orders"][-2]["price"]
-            st.session_state["profit"] += profit
-            st.info(f"Profit from last trade: {profit}")
+            profit = sell_price - st.session_state["orders"][-2]["Preço"]
+            st.session_state["Lucro"] += profit
+            st.info(f"Lucro da última negociação: {profit}")
+            st.info(f"Teste {st.session_state['profit']}")
 
     # Exibir o lucro/perda total
     st.metric(
