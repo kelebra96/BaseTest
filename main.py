@@ -11,6 +11,25 @@ st.set_page_config(
     layout="wide",
 )
 
+import sqlite3
+
+# Conectar ao banco de dados SQLite (será criado se não existir)
+conn = sqlite3.connect("trades.db")
+c = conn.cursor()
+
+# Criar a tabela de trades (se não existir)
+c.execute(
+    """
+    CREATE TABLE IF NOT EXISTS trades (
+        id INTEGER PRIMARY KEY,
+        buy_price REAL,
+        sell_price REAL,
+        profit_loss REAL
+    )
+"""
+)
+conn.commit()
+
 
 # Definir função para obter dados da Binance para o gráfico de candlestick
 def get_candle_data(crypto_symbol, interval, lookback):
@@ -168,52 +187,156 @@ if (
     st.plotly_chart(fig, use_container_width=True)
 
     # Lógica para lidar com ordens de compra e venda
-    last_price = candle_data.iloc[-1]["close"]
-    if buy_price > 0 and last_price <= buy_price:
-        # Registrar ordem de compra
-        st.session_state["orders"].append(
-            {
-                "type": "buy",
-                "price": buy_price,
-                "time": candle_data.iloc[-1]["open_time"],
-            }
-        )
-        st.success(f"Comprei em {buy_price}")  # Valor da compra!!!!
-    if sell_price > 0 and last_price >= sell_price:
-        # Registrar ordem de venda
-        st.session_state["orders"].append(
-            {
-                "type": "sell",
-                "price": sell_price,
-                "time": candle_data.iloc[-1]["open_time"],
-            }
-        )
-        st.success(f"Vendido em {sell_price}")  # Valor da venda!!!!
-        if (
-            len(st.session_state["orders"]) > 1
-            and st.session_state["orders"][-2]["type"] == "buy"
-        ):
-            # Calcular lucro/perda da última operação
-            profit = sell_price - st.session_state["orders"][-2]["Preço"]
-            st.session_state["Lucro"] += profit
-            st.info(f"Lucro da última negociação: {profit}")
-            st.info(f"Teste {st.session_state['profit']}")
+last_price = candle_data.iloc[-1]["close"]
+
+# Inicializar o lucro/perda total
+total_profit_loss = 0.0
+
+# Processar ordens de compra
+if buy_price > 0 and last_price <= buy_price:
+    # Registrar ordem de compra
+    st.session_state["orders"].append(
+        {
+            "type": "buy",
+            "price": buy_price,
+            "time": candle_data.iloc[-1]["open_time"],
+        }
+    )
+    st.success(f"Comprei em {buy_price}")  # Valor da compra!!!!
+
+# Processar ordens de venda
+if sell_price > 0 and last_price >= sell_price:
+    # Registrar ordem de venda
+    st.session_state["orders"].append(
+        {
+            "type": "sell",
+            "price": sell_price,
+            "time": candle_data.iloc[-1]["open_time"],
+        }
+    )
+    st.success(f"Vendido em {sell_price}")  # Valor da venda!!!!
+
+# Calcular lucro/perda total
+for order in st.session_state["orders"]:
+    if order["type"] == "buy":
+        total_profit_loss -= order["price"]  # Dinheiro gasto na compra
+    elif order["type"] == "sell":
+        total_profit_loss += order["price"]  # Dinheiro recebido na venda
+
+# Adicionar/subtrair o valor do último preço para compras não vendidas
+unrealized_profit_loss = 0
+if (
+    len(st.session_state["orders"]) > 0
+    and st.session_state["orders"][-1]["type"] == "buy"
+):
+    unrealized_profit_loss = last_price - st.session_state["orders"][-1]["price"]
+
+# Exibir o lucro/perda total (realizado + não realizado)
+st.metric(
+    label="Total Profit/Loss",
+    value=f"{total_profit_loss - unrealized_profit_loss} {crypto_symbol[-4:]}",
+)
+
+# Adicionar botão para finalizar trade
+finalize_trade = st.sidebar.button("Finalizar Trade")
+
+# Lógica para lidar com ordens de compra e venda
+last_price = candle_data.iloc[-1]["close"]
+
+# Processar ordens de compra
+if (
+    buy_price > 0
+    and last_price <= buy_price
+    and not any(order["type"] == "buy" for order in st.session_state["orders"])
+):
+    # Registrar ordem de compra
+    st.session_state["orders"].append(
+        {
+            "type": "buy",
+            "price": buy_price,
+            "time": candle_data.iloc[-1]["open_time"],
+        }
+    )
+    st.success(f"Comprei em {buy_price}")  # Valor da compra!!!!
+
+# Processar ordens de venda
+if (
+    sell_price > 0
+    and last_price >= sell_price
+    and not any(order["type"] == "sell" for order in st.session_state["orders"])
+):
+    # Registrar ordem de venda
+    st.session_state["orders"].append(
+        {
+            "type": "sell",
+            "price": sell_price,
+            "time": candle_data.iloc[-1]["open_time"],
+        }
+    )
+    st.success(f"Vendido em {sell_price}")  # Valor da venda!!!!
+
+# Se o usuário clicar em "Finalizar Trade", calcular o lucro/perda
+if finalize_trade and len(st.session_state["orders"]) > 0:
+    # Calcular lucro/perda total
+    total_profit_loss = 0.0
+    for order in st.session_state["orders"]:
+        if order["type"] == "buy":
+            total_profit_loss -= order["price"]  # Dinheiro gasto na compra
+        elif order["type"] == "sell":
+            total_profit_loss += order["price"]  # Dinheiro recebido na venda
 
     # Exibir o lucro/perda total
     st.metric(
-        label="Total Profit/Loss",
-        value=f"{st.session_state['profit']} {crypto_symbol[-4:]}",
+        label="Total Profit/Loss", value=f"{total_profit_loss} {crypto_symbol[-4:]}"
     )
 
-    # Exibir o último preço
-    st.success(f"O último preço de fechamento de {crypto_symbol} is {last_price}")
+    # Resetar ordens
+    st.session_state["orders"] = []
 
-    # Identificar e exibir sinais de compra
-    last_row = candle_data.iloc[-1]
-    if last_row["close"] <= last_row["Lower"]:
-        st.warning(
-            "Possível sinal de COMPRA (o preço está igual ou abaixo da faixa inferior de Bollinger)."
-        )
+# Exibir o último preço
+st.success(f"O último preço de fechamento de {crypto_symbol} é {last_price}")
+
+# Se o usuário clicar em "Finalizar Trade", registrar o trade no banco de dados
+if finalize_trade and len(st.session_state["orders"]) > 0:
+    # Calcular lucro/perda total
+    total_profit_loss = 0.0
+    for order in st.session_state["orders"]:
+        if order["type"] == "buy":
+            total_profit_loss -= order["price"]  # Dinheiro gasto na compra
+        elif order["type"] == "sell":
+            total_profit_loss += order["price"]  # Dinheiro recebido na venda
+
+    # Inserir detalhes do trade no banco de dados
+    c.execute(
+        "INSERT INTO trades (buy_price, sell_price, profit_loss) VALUES (?, ?, ?)",
+        (buy_price, sell_price, total_profit_loss),
+    )
+    conn.commit()
+
+    # Exibir o lucro/perda total
+    st.metric(
+        label="Total Profit/Loss", value=f"{total_profit_loss} {crypto_symbol[-4:]}"
+    )
+
+    # Resetar ordens
+    st.session_state["orders"] = []
+
+
+# Consultar e exibir trades do banco de dados
+c.execute("SELECT * FROM trades")
+trades = c.fetchall()
+df_trades = pd.DataFrame(
+    trades, columns=["ID", "Buy Price", "Sell Price", "Profit/Loss"]
+)
+st.dataframe(df_trades)
+
+
+# Identificar e exibir sinais de compra
+last_row = candle_data.iloc[-1]
+if last_row["close"] <= last_row["Lower"]:
+    st.warning(
+        "Possível sinal de COMPRA (o preço está igual ou abaixo da faixa inferior de Bollinger)."
+    )
     # Identificar e exibir sinais de venda
     if last_row["close"] >= last_row["Upper"]:
         st.warning(
